@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simulación de Examen AMG</title>
+<style>
+  :root{
+    --bg:#072146;
+    --card:#ffffff;
+    --accent:#e6eefc;
+    --ok:#16a34a;
+    --err:#ef4444;
+    --primary:#2563eb;
+  }
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    padding:18px;
+    font-family:Inter, Poppins, Arial, sans-serif;
+    background: var(--bg);
+    min-height:100vh;
+
+    /* ⭐ Nuevo: ya NO centramos verticalmente */
+    display:flex;
+    justify-content:center;
+
+    /* ⭐ Nuevo: mueve hacia arriba el recuadro blanco */
+    padding-top:32px;
+
+    color:var(--accent);
+  }
+
+  .quiz-container{
+    width:100%;
+    max-width:980px;
+    background:var(--card);
+    border-radius:14px;
+    padding:22px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.35);
+    color:#0f172a;
+  }
+
+  h1{
+    margin:0 0 22px;  /* ⭐ un poco más de aire debajo del título */
+    text-align:center;
+    color:#0f172a;
+    font-size:1.4rem;
+  }
+
+  .intro {text-align:center; margin:18px 0}
+  .question {font-size:1.05rem; margin:10px 0 14px; color:#0f172a}
+  .pretext {font-size:1rem; color:#374151; margin-bottom:8px;}
+  .progress {text-align:right; font-size:0.9rem; color:#555; margin-bottom:8px;}
+
+  .main-audio {margin-bottom:4px}
+
+  .answers {display:flex; flex-direction:column; gap:10px;}
+
+  .option-row {display:flex; gap:10px; align-items:center; margin-bottom:8px; position:relative;}
+  .option-number {width:100px; text-align:right; font-weight:600; font-size:1rem; color:#0f172a;}
+  @media(max-width:720px){.option-number{width:80px;font-size:0.9rem;}}
+
+  .play-wrap {
+    width:65px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#c7e9ff;
+    border-radius:10px;
+    padding:6px;
+  }
+
+  .audio-btn{
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    border:0;
+    background:linear-gradient(135deg,#3b82f6,#60a5fa);
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    cursor:pointer;
+    box-shadow:0 8px 20px rgba(37,99,235,0.26);
+    transition: transform .14s, box-shadow .14s, opacity .14s;
+  }
+  .audio-btn:hover{transform:scale(1.06)}
+  .audio-btn.playing{
+    background:linear-gradient(135deg,#10b981,#34d399);
+    box-shadow:0 10px 26px rgba(16,185,129,0.22)
+  }
+
+  .answer-btn {
+    flex:1;
+    max-width:180px;
+    text-align:center;
+    padding:10px 12px;
+    font-size:1.2rem;
+    border-radius:8px;
+    border:1px solid #fcd34d;
+    background:#ffe9cc;
+    cursor:pointer;
+    transition: background 0.12s, transform 0.12s;
+    position:relative;
+  }
+  .answer-btn:hover{background:#ffd8a8; transform:scale(1.03)}
+  .answer-btn:disabled{opacity:.6; cursor:not-allowed}
+
+  .answer-btn.correct{background:var(--ok); color:white}
+  .answer-btn.wrong{background:var(--err); color:white}
+
+  .icon {
+    position: absolute;
+    right: -45px;
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    font-size: 1.6rem;
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+  .answer-btn.correct .icon {
+    color: var(--ok);
+    transform: translateY(-50%) scale(1.1);
+    opacity: 1;
+  }
+  .answer-btn.wrong .icon {
+    color: var(--err);
+    transform: translateY(-50%) scale(1.1);
+    opacity: 1;
+  }
+
+  .controls {display:flex; justify-content:center; margin-top:16px; gap:12px;}
+  .btn {
+    padding:10px 16px;
+    border-radius:10px;
+    border:0;
+    background:var(--primary);
+    color:white;
+    font-weight:600;
+    cursor:pointer
+  }
+  .btn.ghost {background:white; color:#0f172a; border:1px solid #e6eefc}
+
+  .summary {text-align:center}
+
+  /* ⭐ Caja para la imagen del reactivo */
+  .quiz-image-box {
+    width: clamp(300px, 47vw, 630px);
+    aspect-ratio: 8 / 2.5;
+    background: #ffe7c2;
+    border-radius: 10px;
+    margin: 8px auto 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 6px;
+  }
+  .quiz-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+</style>
+</head>
+<body>
+  <div class="quiz-container" role="main" aria-labelledby="title">
+    <h1 id="title">Simulación de Examen AMG</h1>
+    <div id="app"></div>
+  </div>
+
+<script>
+const baseQuestions = [
+  { pretext: "IDENTIFICACIÓN GRÁFICA Y AUDITIVA DE SECUENCIAS ARMÓNICAS",
+    image: "p1.jpg",
+    question: `Observa analíticamente la imagen. Elige la opción que corresponda a la imagen.<br><p style="font-weight: bold; color: red">Ejercicio A.</p><span style="font-style: italic; font-size: 0.95rem;">Para contestar da clic en el recuadro que tiene signo de interrogación</span>`,
+    answers: [
+      { text: "?", correct: true, audio: "op1a.mp3" },
+      { text: "?", correct: false, audio: "op1b.mp3" },
+      { text: "?", correct: false, audio: "op1c.mp3" },
+    ]
+  },
+
+  { pretext: "IDENTIFICACIÓN GRÁFICA Y AUDITIVA DE SECUENCIAS ARMÓNICAS",
+    image: "p2.jpg",
+    question: `Observa analíticamente la imagen. Elige la opción que corresponda a la imagen.<br><p style="font-weight: bold; color: indigo">Ejercicio B.</p>`,
+    answers: [
+      { text: "?", correct: true, audio: "op2a.mp3" },
+      { text: "?", correct: false, audio: "op2b.mp3" },
+      { text: "?", correct: false, audio: "op2c.mp3" },
+    ]
+  },
+
+  { pretext: "IDENTIFICACIÓN GRÁFICA Y AUDITIVA DE SECUENCIAS ARMÓNICAS",
+    image: "p3.jpg",
+    question: `Observa analíticamente la imagen. Elige la opción que corresponda a la imagen.<br><p style="font-weight: bold; color: green">Ejercicio C.</p>`,
+    answers: [
+      { text: "?", correct: true, audio: "op3a.mp3" },
+      { text: "?", correct: false, audio: "op3b.mp3" },
+      { text: "?", correct: false, audio: "op3c.mp3" },
+    ]
+  },
+
+  { pretext: "IDENTIFICACIÓN GRÁFICA Y AUDITIVA DE SECUENCIAS ARMÓNICAS",
+    image: "p4.jpg",
+    question: `Observa analíticamente la imagen. Elige la opción que corresponda a la imagen.<br><p style="font-weight: bold; color: green">Ejercicio D.</p>`,
+    answers: [
+      { text: "?", correct: true, audio: "op4a.mp3" },
+      { text: "?", correct: false, audio: "op4b.mp3" },
+      { text: "?", correct: false, audio: "op4c.mp3" },
+    ]
+  },
+
+  { pretext: "IDENTIFICACIÓN GRÁFICA Y AUDITIVA DE SECUENCIAS ARMÓNICAS",
+    image: "p5.jpg",
+    question: `Observa analíticamente la imagen. Elige la opción que corresponda a la imagen.<br><p style="font-weight: bold; color: green">Ejercicio E.</p>`,
+    answers: [
+      { text: "?", correct: true, audio: "op5a.mp3" },
+      { text: "?", correct: false, audio: "op5b.mp3" },
+      { text: "?", correct: false, audio: "op5c.mp3" },
+    ]
+  },
+
+  { pretext: "Tema: sonidos del hogar",
+    image: "p6.jpg",
+    question: "Identifica el sonido que se escucha en casa.",
+    answers: [
+      { text: "?", correct: true, audio: "op6a.mp3" },
+      { text: "?", correct: false, audio: "op6b.mp3" },
+      { text: "?", correct: false, audio: "op6c.mp3" },
+    ]
+  },
+
+  { pretext: "Tema: sonidos de la escuela",
+    image: "p7.jpg",
+    question: "Selecciona el sonido que corresponde.",
+    answers: [
+      { text: "?", correct: true, audio: "op7a.mp3" },
+      { text: "?", correct: false, audio: "op7b.mp3" },
+      { text: "?", correct: false, audio: "op7c.mp3" },
+    ]
+  },
+
+  { pretext: "Tema: sonidos de la ciudad",
+    image: "p8.jpg",
+    question: "Escucha el audio y elige la opción correcta.",
+    answers: [
+      { text: "?", correct: true, audio: "op8a.mp3" },
+      { text: "?", correct: false, audio: "op8b.mp3" },
+      { text: "?", correct: false, audio: "op8c.mp3" },
+    ]
+  },
+
+  { pretext: "Tema: sonidos del campo",
+    image: "p9.jpg",
+    question: "Escucha y selecciona el sonido correcto.",
+    audioSrc: "pregunta9.mp3",
+    answers: [
+      { text: "?", correct: true, audio: "op9a.mp3" },
+      { text: "?", correct: false, audio: "op9b.mp3" },
+      { text: "?", correct: false, audio: "op9c.mp3" },
+    ]
+  },
+
+  { pretext: "Tema: sonidos de objetos metálicos",
+    image: "p10.jpg",
+    question: "Identifica cuál de las opciones coincide con el audio principal.",
+    audioSrc: "pregunta10.mp3",
+    answers: [
+      { text: "?", correct: true, audio: "op10a.mp3" },
+      { text: "?", correct: false, audio: "op10b.mp3" },
+      { text: "?", correct: false, audio: "op10c.mp3" },
+    ]
+  }
+];
+
+let idx = 0, score = 0, studentName = '';
+let userAnswers = [];
+let currentOption = { audio: null, btn: null };
+const correctSnd = new Audio('correct.mp3');
+const wrongSnd = new Audio('wrong.mp3');
+const app = document.getElementById('app');
+
+function shuffle(a){ return a.sort(()=>Math.random()-0.5); }
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function showIntro(){
+  app.innerHTML = `
+    <div class="intro">
+      <p style="font-size:1.24rem">Ejemplo del material didáctico que usamos en nuestro curso.</p>
+      <input id="name" placeholder="Tu nombre" style="padding:10px;border-radius:8px;border:1px solid #ddd;width:70%;max-width:420px">
+      <div style="margin-top:28px">
+        <button id="start" class="btn">Comenzar</button>
+      </div>
+    </div>`;
+  document.getElementById('start').onclick = () => {
+    const n = document.getElementById('name').value.trim();
+    if(!n){ alert('Escribe tu nombre, por favor.'); return; }
+    studentName = n;
+    startQuiz();
+  };
+}
+
+function startQuiz(){
+  idx = 0; score = 0; userAnswers = [];
+  renderShell();
+  showQuestion();
+}
+
+function renderShell(){
+  app.innerHTML = `
+    <div id="qwrap">
+      <div class="progress" id="progress"></div>
+      <div id="pretext" class="pretext"></div>
+      <div id="questionText" class="question"></div>
+      <div id="mainAudio" class="main-audio"></div>
+      <div id="answers" class="answers"></div>
+      <div class="controls">
+        <button id="prevBtn" class="btn ghost" style="display:none">Atrás</button>
+        <button id="nextBtn" class="btn ghost" style="display:none">Siguiente</button>
+      </div>
+    </div>`;
+  document.getElementById('nextBtn').onclick = nextQuestion;
+  document.getElementById('prevBtn').onclick = prevQuestion;
+}
+
+function showQuestion(){
+  stopCurrentOption();
+  const q = baseQuestions[idx];
+  if (!q.shuffledAnswers) q.shuffledAnswers = shuffle([...q.answers]);
+  const shuffled = q.shuffledAnswers;
+
+  document.getElementById('progress').textContent = `Pregunta ${idx+1} de ${baseQuestions.length}`;
+  document.getElementById('pretext').textContent = q.pretext || '';
+  document.getElementById('questionText').innerHTML = q.question;
+
+  const mainAudioWrap = document.getElementById('mainAudio');
+  const answersWrap = document.getElementById('answers');
+  const nextBtn = document.getElementById('nextBtn');
+  const prevBtn = document.getElementById('prevBtn');
+
+  /* ⭐ NUEVO: insertar imagen */
+  mainAudioWrap.innerHTML = '';
+
+  if (q.image) {
+    const box = document.createElement('div');
+    box.className = 'quiz-image-box';
+
+    const img = document.createElement('img');
+    img.src = q.image;
+    img.className = 'quiz-image';
+
+    box.appendChild(img);
+    mainAudioWrap.appendChild(box);
+  }
+
+  /* Si tiene audio principal también lo dejamos debajo si lo deseas.
+     (Si no lo quieres mostrar, solo borra este bloque) */
+  if (q.audioSrc) {
+    const mainAud = document.createElement('audio');
+    mainAud.src = q.audioSrc;
+    mainAud.controls = true;
+    mainAud.preload = "none";
+    mainAudioWrap.appendChild(mainAud);
+  }
+
+  answersWrap.innerHTML = '';
+  nextBtn.style.display = 'none';
+  prevBtn.style.display = idx > 0 ? 'inline-block' : 'none';
+
+  shuffled.forEach((ans, i) => {
+    const row = document.createElement('div');
+    row.className = 'option-row';
+
+    const number = document.createElement('div');
+    number.className = 'option-number';
+    number.textContent = `Opción ${i + 1}`;
+
+    const playWrap = document.createElement('div');
+    playWrap.className = 'play-wrap';
+    const playBtn = document.createElement('button');
+    playBtn.className = 'audio-btn';
+    playBtn.innerHTML = '&#9658;';
+    playWrap.appendChild(playBtn);
+
+    const answerBtn = document.createElement('button');
+    answerBtn.className = 'answer-btn';
+    answerBtn.textContent = ans.text;
+    answerBtn.dataset.ansid = ans.audio || ans.text;
+
+    const icon = document.createElement('span');
+    icon.className = 'icon';
+    answerBtn.appendChild(icon);
+
+    let optionAudio = null;
+    playBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if(!optionAudio){
+        optionAudio = new Audio(ans.audio);
+        optionAudio.addEventListener('ended', () => {
+          playBtn.classList.remove('playing');
+          playBtn.innerHTML = '&#9658;';
+          if(currentOption.audio === optionAudio) currentOption = { audio:null, btn:null };
+        });
+      }
+      if(currentOption.audio && currentOption.audio !== optionAudio){
+        currentOption.audio.pause(); currentOption.audio.currentTime = 0;
+        if(currentOption.btn){
+          currentOption.btn.classList.remove('playing');
+          currentOption.btn.innerHTML = '&#9658;';
+        }
+      }
+      if(optionAudio.paused){
+        optionAudio.play();
+        playBtn.classList.add('playing');
+        playBtn.innerHTML = '&#10074;&#10074;';
+        currentOption = { audio: optionAudio, btn: playBtn };
+      } else {
+        optionAudio.pause(); optionAudio.currentTime = 0;
+        playBtn.classList.remove('playing');
+        playBtn.innerHTML = '&#9658;';
+        currentOption = { audio:null, btn:null };
+      }
+    });
+
+    answerBtn.addEventListener('click', () => handleSelection(answerBtn, ans, icon));
+
+    row.appendChild(number);
+    row.appendChild(playWrap);
+    row.appendChild(answerBtn);
+    answersWrap.appendChild(row);
+  });
+
+  if (userAnswers[idx]) {
+    document.querySelectorAll('.answer-btn').forEach(btn => {
+      const btnId = btn.dataset.ansid;
+      const icon = btn.querySelector('.icon');
+      btn.disabled = true;
+      const correctAns = baseQuestions[idx].answers.find(a => a.correct);
+      const correctId = correctAns ? (correctAns.audio || correctAns.text) : null;
+      if (btnId === correctId) { btn.classList.add('correct'); icon.textContent = "✅"; }
+      if (btnId === userAnswers[idx].chosenId && !userAnswers[idx].correct) { btn.classList.add('wrong'); icon.textContent = "❌"; }
+      if (btnId === userAnswers[idx].chosenId && userAnswers[idx].correct) { btn.classList.add('correct'); icon.textContent = "✅"; }
+    });
+    nextBtn.style.display = idx < baseQuestions.length - 1 ? 'inline-block' : 'none';
+  }
+}
+
+function handleSelection(btn, ans, icon){
+  document.querySelectorAll('.answer-btn').forEach(b => b.disabled = true);
+  stopCurrentOption();
+  const wasCorrect = !!ans.correct;
+  userAnswers[idx] = { chosenId: ans.audio || ans.text, chosenText: ans.text, correct: wasCorrect };
+  if(wasCorrect){
+    btn.classList.add('correct');
+    icon.textContent = "✅";
+    safePlay(correctSnd);
+    score++;
+    setTimeout(nextQuestion, 1800);
+  } else {
+    btn.classList.add('wrong');
+    icon.textContent = "❌";
+    safePlay(wrongSnd);
+    const correctAns = baseQuestions[idx].answers.find(a => a.correct);
+    const correctId = correctAns ? (correctAns.audio || correctAns.text) : null;
+    document.querySelectorAll('.answer-btn').forEach(b => {
+      if(b.dataset.ansid === correctId){
+        b.classList.add('correct');
+        b.querySelector('.icon').textContent = "✅";
+      }
+    });
+    document.getElementById('nextBtn').style.display = 'inline-block';
+  }
+}
+
+function nextQuestion(){ stopCurrentOption(); idx++; if(idx < baseQuestions.length) showQuestion(); else renderSummary(); }
+function prevQuestion(){ if(idx > 0){ idx--; showQuestion(); } }
+function stopCurrentOption(){ if(currentOption.audio){ currentOption.audio.pause(); currentOption.audio.currentTime=0; } if(currentOption.btn){ currentOption.btn.classList.remove('playing'); currentOption.btn.innerHTML='&#9658;'; } currentOption={audio:null,btn:null}; }
+function safePlay(aud){ try{ aud.currentTime=0; aud.play().catch(()=>{});}catch(e){} }
+
+function renderSummary(){
+  stopCurrentOption();
+  const total=baseQuestions.length;
+  const percent=Math.round((score/total)*100);
+  const msg=percent>=100?'Excelente trabajo.':percent>=80?'Bien hecho.':percent>=10?'Puedes mejorar. Para asesorías comunícate al 55 71 53 86 46.':'.';
+  app.innerHTML=`
+    <div class="summary">
+      <h2>Resumen final</h2>
+      <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
+      <p><strong>Puntaje:</strong> ${score} / ${total} (${percent}%)</p>
+      <p>${msg}</p>
+      <p><em>Completaste ${total} de ${total} preguntas.</em></p>
+      <div class="controls">
+        <button id="restart" class="btn ghost">Reiniciar</button>
+      </div>
+    </div>`;
+  document.getElementById('restart').onclick=showIntro;
+}
+
+showIntro();
+</script>
+</body>
+</html>
